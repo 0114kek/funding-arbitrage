@@ -31,7 +31,9 @@ export const fetchFundingRates = async (): Promise<{ data: DashboardRow[]; excha
             json.funding_rates.forEach((item) => {
                 const symbol = item.symbol.toUpperCase();
                 const exchange = item.exchange.toLowerCase(); // binance, lighter, ...
-
+                if (exchange === 'bybit') { // bybit funding rate is not reliable
+                    return;
+                }
                 exchangesSet.add(exchange);
 
                 if (!combinedData[symbol]) {
