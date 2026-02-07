@@ -1,0 +1,194 @@
+/* Dashboard Container */
+.dashboard-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: #f8fafc;
+}
+
+.dashboard-header {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.dashboard-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(to right, #60a5fa, #c084fc);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: #94a3b8;
+  font-size: 1.1rem;
+}
+
+/* Sections */
+section {
+  margin-bottom: 3rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  font-size: 1.5rem;
+  color: #64748b;
+  margin-top: 4rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Table Wrapper */
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.funding-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+
+/* Header */
+.funding-table th {
+  background: rgba(15, 23, 42, 0.95);
+  color: #94a3b8;
+  font-weight: 600;
+  text-align: right;
+  padding: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
+  user-select: none;
+}
+
+.funding-table th:first-child {
+  text-align: left;
+  padding-left: 2rem;
+}
+
+.funding-table th:hover {
+  color: #f1f5f9;
+  background: rgba(30, 41, 59, 0.95);
+}
+
+/* Rows */
+.funding-table tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.2s;
+}
+
+.funding-table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.funding-table td {
+  padding: 1rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.symbol-cell {
+  text-align: left !important;
+  padding-left: 2rem !important;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.strategy-cell {
+  text-align: left !important;
+  color: #fbbf24; /* Amber-400 */
+  font-weight: 500;
+}
+
+.gap-cell {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+/* Exchange Label Pill */
+.ex-label {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+/* Colors & Utils */
+.text-green {
+  color: #34d399;
+}
+
+.text-red {
+  color: #f87171;
+}
+
+.text-gray {
+  color: #64748b;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
