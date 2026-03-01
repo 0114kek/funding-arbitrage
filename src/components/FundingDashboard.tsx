@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchFundingRates } from "../services/api";
 import type { DashboardRow, SortConfig } from "../types";
 import {
@@ -15,7 +15,7 @@ type ExtendedRow = DashboardRow & {
 const FundingDashboard = () => {
   const [data, setData] = useState<ExtendedRow[]>([]);
   const [exchanges, setExchanges] = useState<string[]>([]);
-  const [topOpportunities, setTopOpportunities] = useState<
+  const [allOpportunities, setAllOpportunities] = useState<
     ArbitrageOpportunity[]
   >([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,6 +23,25 @@ const FundingDashboard = () => {
     key: "maxGap",
     direction: "desc",
   });
+  const [hiddenSymbols, setHiddenSymbols] = useState<Set<string>>(new Set());
+
+  // Derive sorted list of all available symbols for the filter panel
+  const allSymbols = [...new Set(data.map((row) => row.symbol))].sort();
+
+  const toggleSymbol = (symbol: string) => {
+    setHiddenSymbols((prev) => {
+      const next = new Set(prev);
+      if (next.has(symbol)) {
+        next.delete(symbol);
+      } else {
+        next.add(symbol);
+      }
+      return next;
+    });
+  };
+
+  const showAll = () => setHiddenSymbols(new Set());
+  const hideAll = () => setHiddenSymbols(new Set(allSymbols));
 
   useEffect(() => {
     const loadData = async () => {
@@ -49,7 +68,7 @@ const FundingDashboard = () => {
 
       setData(processedData);
       setExchanges(excha);
-      setTopOpportunities(opps.slice(0, 5));
+      setAllOpportunities(opps);
       setIsLoading(false);
     };
 
@@ -83,6 +102,15 @@ const FundingDashboard = () => {
     return 0;
   });
 
+  // Recalculate top 5 excluding hidden symbols
+  const topOpportunities = useMemo(
+    () =>
+      allOpportunities
+        .filter((opp) => !hiddenSymbols.has(opp.symbol))
+        .slice(0, 5),
+    [allOpportunities, hiddenSymbols],
+  );
+
   const formatRate = (rate: number | undefined) => {
     if (rate === undefined) return "-";
     // Display as % with 4 decimals
@@ -110,6 +138,40 @@ const FundingDashboard = () => {
         <div className="loading">Loading funding rates...</div>
       ) : (
         <>
+          {/* Token Filter Panel */}
+          <section className="filter-panel">
+            <h2>🔍 Filter Tokens</h2>
+            <div className="filter-actions">
+              <button className="filter-btn" onClick={showAll}>
+                Show All
+              </button>
+              <button className="filter-btn" onClick={hideAll}>
+                Hide All
+              </button>
+              <span className="filter-count">
+                {allSymbols.length - hiddenSymbols.size} / {allSymbols.length}{" "}
+                visible
+              </span>
+            </div>
+            <div className="filter-chips">
+              {allSymbols.map((symbol) => (
+                <label
+                  key={symbol}
+                  className={`filter-chip ${
+                    hiddenSymbols.has(symbol) ? "filter-chip--hidden" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!hiddenSymbols.has(symbol)}
+                    onChange={() => toggleSymbol(symbol)}
+                  />
+                  {symbol}
+                </label>
+              ))}
+            </div>
+          </section>
+
           {/* Top 5 Opportunities Table */}
           <section className="top-opportunities">
             <h2>🔥 Top 5 Arbitrage Opportunities</h2>
@@ -125,23 +187,27 @@ const FundingDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {topOpportunities.map((opp) => (
-                    <tr key={opp.symbol}>
-                      <td className="symbol-cell">{opp.symbol}</td>
-                      <td className="strategy-cell">{opp.strategy}</td>
-                      <td className="text-green font-bold">
-                        {(opp.gap * 100).toFixed(4)}%
-                      </td>
-                      <td>
-                        {formatRate(opp.highestRate)}
-                        <span className="ex-label">{opp.highestExchange}</span>
-                      </td>
-                      <td>
-                        {formatRate(opp.lowestRate)}
-                        <span className="ex-label">{opp.lowestExchange}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {topOpportunities
+                    .filter((opp) => !hiddenSymbols.has(opp.symbol))
+                    .map((opp) => (
+                      <tr key={opp.symbol}>
+                        <td className="symbol-cell">{opp.symbol}</td>
+                        <td className="strategy-cell">{opp.strategy}</td>
+                        <td className="text-green font-bold">
+                          {(opp.gap * 100).toFixed(4)}%
+                        </td>
+                        <td>
+                          {formatRate(opp.highestRate)}
+                          <span className="ex-label">
+                            {opp.highestExchange}
+                          </span>
+                        </td>
+                        <td>
+                          {formatRate(opp.lowestRate)}
+                          <span className="ex-label">{opp.lowestExchange}</span>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -154,6 +220,7 @@ const FundingDashboard = () => {
               <table className="funding-table">
                 <thead>
                   <tr>
+                    <th className="th-checkbox">👁</th>
                     <th
                       onClick={() => handleSort("symbol")}
                       className={
@@ -190,22 +257,33 @@ const FundingDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedData.map((row) => (
-                    <tr key={row.symbol}>
-                      <td className="symbol-cell">{row.symbol}</td>
-                      <td className="gap-cell">
-                        {row.maxGap ? `${(row.maxGap * 100).toFixed(4)}%` : "-"}
-                      </td>
-                      {exchanges.map((ex) => {
-                        const rate = row[ex] as number | undefined;
-                        return (
-                          <td key={ex} className={getRateColor(rate)}>
-                            {formatRate(rate)}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                  {sortedData
+                    .filter((row) => !hiddenSymbols.has(row.symbol))
+                    .map((row) => (
+                      <tr key={row.symbol}>
+                        <td className="checkbox-cell">
+                          <input
+                            type="checkbox"
+                            checked={!hiddenSymbols.has(row.symbol)}
+                            onChange={() => toggleSymbol(row.symbol)}
+                          />
+                        </td>
+                        <td className="symbol-cell">{row.symbol}</td>
+                        <td className="gap-cell">
+                          {row.maxGap
+                            ? `${(row.maxGap * 100).toFixed(4)}%`
+                            : "-"}
+                        </td>
+                        {exchanges.map((ex) => {
+                          const rate = row[ex] as number | undefined;
+                          return (
+                            <td key={ex} className={getRateColor(rate)}>
+                              {formatRate(rate)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
