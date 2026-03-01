@@ -1,7 +1,7 @@
 import type { DashboardRow, FundingRate } from '../types';
 
 const LIGHTER_API_URL = 'https://mainnet.zklighter.elliot.ai/api/v1/funding-rates';
-const VARIATIONAL_API_URL = 'https://omni.variational.io/api/metadata/supported_assets';
+const VARIATIONAL_API_URL = 'https://omni-client-api.prod.ap-northeast-1.variational.io/metadata/stats';
 
 interface LighterResponse {
     code: number;
@@ -9,12 +9,17 @@ interface LighterResponse {
 }
 
 interface VariationalAsset {
-    asset: string;
+    ticker: string;
     funding_rate: string;
     funding_interval_s: number;
 }
 
-type VariationalResponse = Record<string, VariationalAsset[]>;
+interface VariationalResponse {
+    listings: VariationalAsset[];
+}
+
+// Number of 8-hour intervals in a year: 365 * 3 = 1095
+const INTERVALS_PER_YEAR = 1095;
 
 export const fetchFundingRates = async (): Promise<{ data: DashboardRow[]; exchanges: string[] }> => {
     const combinedData: Record<string, DashboardRow> = {};
@@ -54,27 +59,20 @@ export const fetchFundingRates = async (): Promise<{ data: DashboardRow[]; excha
             const exchange = 'variational';
             exchangesSet.add(exchange);
 
-            Object.entries(json).forEach(([keySymbol, assets]) => {
-                if (assets && assets.length > 0) {
-                    const asset = assets[0];
-                    // Use asset name or key? key seems to be symbol
-                    const symbol = keySymbol.toUpperCase();
+            json.listings.forEach((asset) => {
+                if (!asset.funding_rate) return;
 
-                    if (asset.funding_rate) {
-                        const rawRate = parseFloat(asset.funding_rate);
+                const symbol = asset.ticker.toUpperCase();
+                const rawRate = parseFloat(asset.funding_rate);
 
-                        // Variational = Annualized (APR)
-                        // Lighter = 8-hour rate (assumed based on user input, standard perp contract)
-                        // To compare, we convert Variational to 8-hour rate.
-                        // 8h Rate = Annual Rate / (365 days * 3 intervals/day)
-                        const normalized8hRate = rawRate / 1095;
+                // Variational funding_rate is annualized APR (e.g. 0.06 = 6%/year)
+                // Convert to 8-hour rate: Annual Rate / 1095 (365 days * 3 intervals/day)
+                const normalized8hRate = rawRate / INTERVALS_PER_YEAR;
 
-                        if (!combinedData[symbol]) {
-                            combinedData[symbol] = { symbol };
-                        }
-                        combinedData[symbol][exchange] = normalized8hRate;
-                    }
+                if (!combinedData[symbol]) {
+                    combinedData[symbol] = { symbol };
                 }
+                combinedData[symbol][exchange] = normalized8hRate;
             });
         } else {
             console.warn('Variational API returned status:', response.status);

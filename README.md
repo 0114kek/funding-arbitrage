@@ -1,16 +1,25 @@
 # Funding Arbitrage Dashboard
 
-A real-time dashboard to track and compare funding rates across multiple cryptocurrency exchanges to identify arbitrage opportunities. This application fetches funding rates, normalizes them (e.g., to 8-hour intervals), and highlights the best opportunities for funding rate arbitrage.
+A real-time dashboard to track and compare funding rates across multiple cryptocurrency exchanges to identify arbitrage opportunities. All rates are normalized to **APR (Annual Percentage Rate)** for easy comparison across exchanges with different funding intervals.
 
 ## Features
 
-- **Real-Time Comparison**: Visualizes funding rates from multiple exchanges (e.g., Lighter, Binance, Bybit, Hyperliquid, Variational) side-by-side.
-- **Arbitrage Finder**: Automatically calculates and displays the specific "Max Gap" between the highest and lowest funding rates for each asset.
+- **Real-Time Comparison**: Visualizes funding rates from multiple exchanges (Lighter, Binance, Hyperliquid, Variational) side-by-side, all normalized to APR.
+- **Arbitrage Finder**: Automatically calculates and displays the "Max Gap" (APR) between the highest and lowest funding rates for each asset.
 - **Top 5 Opportunities**: Highlights the top 5 arbitrage opportunities with the largest spread, suggesting Long/Short strategies.
-- **Sorting & Filtering**: Easily sort assets by symbol, max gap, or specific exchange rates.
-- **Token Filter**: Hide specific tokens from view using the filter panel or in-table checkboxes. Top 5 opportunities are recalculated dynamically based on visible tokens.
+- **Token Filter**: Hide specific tokens using the filter panel (with Show All / Hide All) or in-table checkboxes in the All Rates section. Top 5 opportunities are recalculated dynamically based on visible tokens.
+- **Sorting**: Sort assets by symbol, max gap, or specific exchange rates.
 - **Live Updates**: Data refreshes automatically every 60 seconds.
 - **Responsive Design**: Built with a premium dark theme for easy readability.
+
+## Data Sources
+
+| Exchange    | Source                                                                                       | Rate Format                    |
+| ----------- | -------------------------------------------------------------------------------------------- | ------------------------------ |
+| Lighter     | [Lighter API](https://mainnet.zklighter.elliot.ai/api/v1/funding-rates)                      | 8-hour rate → converted to APR |
+| Binance     | via Lighter API                                                                              | 8-hour rate → converted to APR |
+| Hyperliquid | via Lighter API                                                                              | 8-hour rate → converted to APR |
+| Variational | [Variational API](https://omni-client-api.prod.ap-northeast-1.variational.io/metadata/stats) | Annualized APR (used directly) |
 
 ## Tech Stack
 

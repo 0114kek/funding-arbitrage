@@ -113,9 +113,9 @@ const FundingDashboard = () => {
 
   const formatRate = (rate: number | undefined) => {
     if (rate === undefined) return "-";
-    // Display as % with 4 decimals
-    const percentage = rate * 100;
-    return `${percentage.toFixed(4)}%`;
+    // Convert 8h rate to APR: rate * 1095 (365 * 3), then display as %
+    const apr = rate * 1095 * 100;
+    return `${apr.toFixed(2)}%`;
   };
 
   const getRateColor = (rate: number | undefined) => {
@@ -181,7 +181,7 @@ const FundingDashboard = () => {
                   <tr>
                     <th>Symbol</th>
                     <th>Strategy</th>
-                    <th>Gap (8h)</th>
+                    <th>Gap (APR)</th>
                     <th>Highest</th>
                     <th>Lowest</th>
                   </tr>
@@ -194,7 +194,7 @@ const FundingDashboard = () => {
                         <td className="symbol-cell">{opp.symbol}</td>
                         <td className="strategy-cell">{opp.strategy}</td>
                         <td className="text-green font-bold">
-                          {(opp.gap * 100).toFixed(4)}%
+                          {(opp.gap * 1095 * 100).toFixed(2)}%
                         </td>
                         <td>
                           {formatRate(opp.highestRate)}
@@ -271,7 +271,7 @@ const FundingDashboard = () => {
                         <td className="symbol-cell">{row.symbol}</td>
                         <td className="gap-cell">
                           {row.maxGap
-                            ? `${(row.maxGap * 100).toFixed(4)}%`
+                            ? `${(row.maxGap * 1095 * 100).toFixed(2)}%`
                             : "-"}
                         </td>
                         {exchanges.map((ex) => {
