@@ -7,19 +7,19 @@ A real-time dashboard to track and compare funding rates across multiple cryptoc
 - **Real-Time Comparison**: Visualizes funding rates from multiple exchanges (Lighter, Binance, Hyperliquid, Variational) side-by-side, all normalized to APR.
 - **Arbitrage Finder**: Automatically calculates and displays the "Max Gap" (APR) between the highest and lowest funding rates for each asset.
 - **Top 5 Opportunities**: Highlights the top 5 arbitrage opportunities with the largest spread, suggesting Long/Short strategies.
-- **Token Filter**: Hide specific tokens using the filter panel (with Show All / Hide All) or in-table checkboxes in the All Rates section. Top 5 opportunities are recalculated dynamically based on visible tokens.
+- **Token & Exchange Filter**: Hide specific tokens or entire exchanges using a sleek, searchable dropdown menu. Top 5 opportunities are recalculated dynamically based on visible tokens and exchanges.
 - **Sorting**: Sort assets by symbol, max gap, or specific exchange rates.
 - **Live Updates**: Data refreshes automatically every 60 seconds.
 - **Responsive Design**: Built with a premium dark theme for easy readability.
 
 ## Data Sources
 
-| Exchange    | Source                                                                                       | Rate Format                    |
-| ----------- | -------------------------------------------------------------------------------------------- | ------------------------------ |
-| Lighter     | [Lighter API](https://mainnet.zklighter.elliot.ai/api/v1/funding-rates)                      | 8-hour rate → converted to APR |
-| Binance     | via Lighter API                                                                              | 8-hour rate → converted to APR |
-| Hyperliquid | via Lighter API                                                                              | 8-hour rate → converted to APR |
-| Variational | [Variational API](https://omni-client-api.prod.ap-northeast-1.variational.io/metadata/stats) | Annualized APR (used directly) |
+| Exchange    | Source                                                                                       | Rate Format                                               |
+| ----------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Lighter     | [Lighter API](https://mainnet.zklighter.elliot.ai/api/v1/funding-rates)                      | 8-hour rate → converted to APR                            |
+| Binance     | [Binance Futures API](https://fapi.binance.com/fapi/v1/premiumIndex)                         | 8/4-hour rate automatically normalized → converted to APR |
+| Hyperliquid | [Hyperliquid Info API](https://api.hyperliquid.xyz/info)                                     | 1-hour rate automatically normalized → converted to APR   |
+| Variational | [Variational API](https://omni-client-api.prod.ap-northeast-1.variational.io/metadata/stats) | Annualized APR (used directly)                            |
 
 ## Tech Stack
 

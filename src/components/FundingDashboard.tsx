@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { fetchFundingRates } from "../services/api";
 import type { DashboardRow, SortConfig } from "../types";
 import {
@@ -25,9 +25,40 @@ const FundingDashboard = () => {
     direction: "desc",
   });
   const [hiddenSymbols, setHiddenSymbols] = useState<Set<string>>(new Set());
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const filterRef = useRef<HTMLDivElement>(null);
 
   // Derive sorted list of all available symbols for the filter panel
   const allSymbols = [...new Set(data.map((row) => row.symbol))].sort();
+
+  const filteredSymbols = useMemo(() => {
+    if (!searchQuery) return allSymbols;
+    const lowerQuery = searchQuery.toLowerCase();
+    return allSymbols.filter((s) => s.toLowerCase().includes(lowerQuery));
+  }, [allSymbols, searchQuery]);
+
+  const filteredExchanges = useMemo(() => {
+    if (!searchQuery) return exchanges;
+    const lowerQuery = searchQuery.toLowerCase();
+    return exchanges.filter((ex) => ex.toLowerCase().includes(lowerQuery));
+  }, [exchanges, searchQuery]);
+
+  // Handle clicking outside of dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        filterRef.current &&
+        !filterRef.current.contains(event.target as Node)
+      ) {
+        setIsFilterOpen(false);
+      }
+    };
+    if (isFilterOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isFilterOpen]);
 
   const toggleSymbol = (symbol: string) => {
     setHiddenSymbols((prev) => {
@@ -43,9 +74,9 @@ const FundingDashboard = () => {
 
   const toggleExchange = (
     exchange: string,
-    e: React.MouseEvent | React.ChangeEvent,
+    e?: React.MouseEvent | React.ChangeEvent,
   ) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     setHiddenExchanges((prev) => {
       const next = new Set(prev);
       if (next.has(exchange)) {
@@ -57,8 +88,11 @@ const FundingDashboard = () => {
     });
   };
 
-  const showAll = () => setHiddenSymbols(new Set());
-  const hideAll = () => setHiddenSymbols(new Set(allSymbols));
+  const resetFilters = () => {
+    setHiddenSymbols(new Set());
+    setHiddenExchanges(new Set());
+    setSearchQuery("");
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -161,39 +195,118 @@ const FundingDashboard = () => {
         <div className="loading">Loading funding rates...</div>
       ) : (
         <>
-          {/* Token Filter Panel */}
-          <section className="filter-panel">
-            <h2>🔍 Filter Tokens</h2>
-            <div className="filter-actions">
-              <button className="filter-btn" onClick={showAll}>
-                Show All
+          {/* Main Controls Area */}
+          <div className="dashboard-controls">
+            <div className="filter-dropdown-container" ref={filterRef}>
+              <button
+                className={`filter-toggle-btn ${isFilterOpen ? "active" : ""}`}
+                onClick={() => setIsFilterOpen(!isFilterOpen)}
+              >
+                <span className="filter-icon">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                  </svg>
+                </span>
+                Filter
               </button>
-              <button className="filter-btn" onClick={hideAll}>
-                Hide All
-              </button>
-              <span className="filter-count">
-                {allSymbols.length - hiddenSymbols.size} / {allSymbols.length}{" "}
-                visible
-              </span>
+
+              {isFilterOpen && (
+                <div className="filter-dropdown-menu">
+                  <div className="filter-header-row">
+                    <div className="filter-search-input-wrapper">
+                      <svg
+                        className="search-icon"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      </svg>
+                      <input
+                        type="text"
+                        placeholder="Search assets..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    {searchQuery && (
+                      <button
+                        className="filter-clear-btn"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="filter-list-body">
+                    {filteredExchanges.length > 0 && (
+                      <div className="filter-group">
+                        <div className="filter-group-title">Exchanges</div>
+                        {filteredExchanges.map((ex) => (
+                          <label key={ex} className="filter-list-item">
+                            <input
+                              type="checkbox"
+                              checked={!hiddenExchanges.has(ex)}
+                              onChange={(e) => toggleExchange(ex, e)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <span className="filter-item-name">
+                              {ex.charAt(0).toUpperCase() + ex.slice(1)}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    {filteredSymbols.length > 0 && (
+                      <div className="filter-group">
+                        <div className="filter-group-title">Tokens</div>
+                        {filteredSymbols.map((symbol) => (
+                          <label key={symbol} className="filter-list-item">
+                            <input
+                              type="checkbox"
+                              checked={!hiddenSymbols.has(symbol)}
+                              onChange={() => toggleSymbol(symbol)}
+                            />
+                            <span className="filter-item-name">{symbol}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    {filteredExchanges.length === 0 &&
+                      filteredSymbols.length === 0 && (
+                        <div className="filter-no-results">
+                          No tokens or exchanges found
+                        </div>
+                      )}
+                  </div>
+                  <div className="filter-footer">
+                    <button className="filter-reset-btn" onClick={resetFilters}>
+                      Reset Filters
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="filter-chips">
-              {allSymbols.map((symbol) => (
-                <label
-                  key={symbol}
-                  className={`filter-chip ${
-                    hiddenSymbols.has(symbol) ? "filter-chip--hidden" : ""
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!hiddenSymbols.has(symbol)}
-                    onChange={() => toggleSymbol(symbol)}
-                  />
-                  {symbol}
-                </label>
-              ))}
-            </div>
-          </section>
+          </div>
 
           {/* Top 5 Opportunities Table */}
           <section className="top-opportunities">
@@ -243,7 +356,6 @@ const FundingDashboard = () => {
               <table className="funding-table">
                 <thead>
                   <tr>
-                    <th className="th-checkbox">👁</th>
                     <th
                       onClick={() => handleSort("symbol")}
                       className={`th-symbol ${
@@ -275,12 +387,6 @@ const FundingDashboard = () => {
                         } ${hiddenExchanges.has(ex) ? "th-exchange--hidden" : ""}`}
                       >
                         <div className="th-exchange-content">
-                          <input
-                            type="checkbox"
-                            checked={!hiddenExchanges.has(ex)}
-                            onChange={(e) => toggleExchange(ex, e)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
                           <span>
                             {ex.charAt(0).toUpperCase() + ex.slice(1)}
                           </span>
@@ -294,13 +400,6 @@ const FundingDashboard = () => {
                     .filter((row) => !hiddenSymbols.has(row.symbol))
                     .map((row) => (
                       <tr key={row.symbol}>
-                        <td className="checkbox-cell">
-                          <input
-                            type="checkbox"
-                            checked={!hiddenSymbols.has(row.symbol)}
-                            onChange={() => toggleSymbol(row.symbol)}
-                          />
-                        </td>
                         <td className="symbol-cell">{row.symbol}</td>
                         <td className="gap-cell">
                           {row.maxGap
