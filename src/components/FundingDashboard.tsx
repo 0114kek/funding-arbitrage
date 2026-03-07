@@ -13,11 +13,12 @@ type ExtendedRow = DashboardRow & {
 };
 
 const FundingDashboard = () => {
+  const [rawData, setRawData] = useState<DashboardRow[]>([]);
   const [data, setData] = useState<ExtendedRow[]>([]);
   const [exchanges, setExchanges] = useState<string[]>([]);
-  const [allOpportunities, setAllOpportunities] = useState<
-    ArbitrageOpportunity[]
-  >([]);
+  const [hiddenExchanges, setHiddenExchanges] = useState<Set<string>>(
+    new Set(),
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: "maxGap",
@@ -40,6 +41,22 @@ const FundingDashboard = () => {
     });
   };
 
+  const toggleExchange = (
+    exchange: string,
+    e: React.MouseEvent | React.ChangeEvent,
+  ) => {
+    e.stopPropagation();
+    setHiddenExchanges((prev) => {
+      const next = new Set(prev);
+      if (next.has(exchange)) {
+        next.delete(exchange);
+      } else {
+        next.add(exchange);
+      }
+      return next;
+    });
+  };
+
   const showAll = () => setHiddenSymbols(new Set());
   const hideAll = () => setHiddenSymbols(new Set(allSymbols));
 
@@ -48,27 +65,9 @@ const FundingDashboard = () => {
       // Don't show loading on subsequent refreshes to prevent flickering
       if (data.length === 0) setIsLoading(true);
 
-      const { data: rawData, exchanges: excha } = await fetchFundingRates();
-
-      // Process data for arbitrage
-      const processedData: ExtendedRow[] = [];
-      const opps: ArbitrageOpportunity[] = [];
-
-      rawData.forEach((row) => {
-        const arb = calculateArbitrage(row, excha);
-        if (arb) {
-          // Only include if it has >1 exchange (arb is not null)
-          processedData.push({ ...row, maxGap: arb.gap });
-          opps.push(arb);
-        }
-      });
-
-      // Sort opportunities by gap desc
-      opps.sort((a, b) => b.gap - a.gap);
-
-      setData(processedData);
+      const { data: rawResp, exchanges: excha } = await fetchFundingRates();
+      setRawData(rawResp);
       setExchanges(excha);
-      setAllOpportunities(opps);
       setIsLoading(false);
     };
 
@@ -76,6 +75,30 @@ const FundingDashboard = () => {
     const interval = setInterval(loadData, 60000);
     return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Dynamic Arbitrage calculation based on visible exchanges
+  const { processedData, allOpportunities } = useMemo(() => {
+    const visibleExchanges = exchanges.filter((ex) => !hiddenExchanges.has(ex));
+    const processed: ExtendedRow[] = [];
+    const opps: ArbitrageOpportunity[] = [];
+
+    rawData.forEach((row) => {
+      const arb = calculateArbitrage(row, visibleExchanges);
+      if (arb) {
+        // Only include if it has >1 exchange (arb is not null)
+
+        processed.push({ ...row, maxGap: arb.gap });
+        opps.push(arb);
+      }
+    });
+
+    opps.sort((a, b) => b.gap - a.gap);
+    return { processedData: processed, allOpportunities: opps };
+  }, [rawData, exchanges, hiddenExchanges]);
+
+  useEffect(() => {
+    setData(processedData);
+  }, [processedData]);
 
   const handleSort = (key: string) => {
     let direction: "asc" | "desc" = "desc";
@@ -179,7 +202,7 @@ const FundingDashboard = () => {
               <table className="funding-table">
                 <thead>
                   <tr>
-                    <th>Symbol</th>
+                    <th className="th-symbol">Symbol</th>
                     <th>Strategy</th>
                     <th>Gap (APR)</th>
                     <th>Highest</th>
@@ -223,11 +246,11 @@ const FundingDashboard = () => {
                     <th className="th-checkbox">👁</th>
                     <th
                       onClick={() => handleSort("symbol")}
-                      className={
+                      className={`th-symbol ${
                         sortConfig.key === "symbol"
                           ? `sorted-${sortConfig.direction}`
                           : ""
-                      }
+                      }`}
                     >
                       Symbol
                     </th>
@@ -245,13 +268,23 @@ const FundingDashboard = () => {
                       <th
                         key={ex}
                         onClick={() => handleSort(ex)}
-                        className={
+                        className={`th-exchange ${
                           sortConfig.key === ex
                             ? `sorted-${sortConfig.direction}`
                             : ""
-                        }
+                        } ${hiddenExchanges.has(ex) ? "th-exchange--hidden" : ""}`}
                       >
-                        {ex.charAt(0).toUpperCase() + ex.slice(1)}
+                        <div className="th-exchange-content">
+                          <input
+                            type="checkbox"
+                            checked={!hiddenExchanges.has(ex)}
+                            onChange={(e) => toggleExchange(ex, e)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span>
+                            {ex.charAt(0).toUpperCase() + ex.slice(1)}
+                          </span>
+                        </div>
                       </th>
                     ))}
                   </tr>
@@ -275,6 +308,8 @@ const FundingDashboard = () => {
                             : "-"}
                         </td>
                         {exchanges.map((ex) => {
+                          if (hiddenExchanges.has(ex))
+                            return <td key={ex}></td>;
                           const rate = row[ex] as number | undefined;
                           return (
                             <td key={ex} className={getRateColor(rate)}>

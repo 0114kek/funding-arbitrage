@@ -100,9 +100,28 @@ h2 {
   user-select: none;
 }
 
-.funding-table th:first-child {
-  text-align: left;
-  padding-left: 2rem;
+.th-symbol {
+  text-align: left !important;
+  padding-left: 2rem !important;
+}
+
+.th-exchange-content {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.th-exchange-content input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #60a5fa;
+}
+
+.th-exchange--hidden {
+  opacity: 0.5;
+  background: rgba(15, 23, 42, 0.5) !important;
 }
 
 .funding-table th:hover {
