@@ -1,13 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  useRef,
-  useCallback,
-  memo,
-  useDeferredValue,
-} from "react";
-import { List } from "react-window";
+import { useEffect, useMemo, useState, useRef, useCallback, memo } from "react";
 import { fetchFundingRates } from "../services/api";
 import type { DashboardRow, SortConfig } from "../types";
 import {
@@ -20,6 +11,7 @@ import "./Dashboard.css";
 
 /** Multiplier to convert an 8-hour rate to an annual percentage (APR %). */
 const RATE_TO_APR_PERCENT = 1095 * 100; // 365 × 3 × 100
+const ROWS_PER_PAGE = 100;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -103,101 +95,6 @@ const FilterItem = memo(
   ),
 );
 
-const VirtualizedTokenRow = ({
-  index,
-  style,
-  tokens,
-  hiddenSymbols,
-  toggleSymbol,
-}: any) => {
-  const symbol = tokens[index];
-  return (
-    <div style={style}>
-      <FilterItem
-        label={symbol}
-        checked={!hiddenSymbols.has(symbol)}
-        onToggle={toggleSymbol}
-      />
-    </div>
-  );
-};
-
-const TopOppRow = memo(
-  ({
-    opp,
-    checked,
-    onToggle,
-  }: {
-    opp: ArbitrageOpportunity;
-    checked: boolean;
-    onToggle: (s: string) => void;
-  }) => (
-    <tr>
-      <td className="symbol-cell has-inline-checkbox">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={() => onToggle(opp.symbol)}
-          title="Hide from dashboard"
-        />
-        {opp.symbol}
-      </td>
-      <td className="strategy-cell">{opp.strategy}</td>
-      <td className="text-green font-bold">
-        {(opp.gap * RATE_TO_APR_PERCENT).toFixed(2)}%
-      </td>
-      <td>
-        {formatRate(opp.highestRate)}
-        <span className="ex-label">{capitalize(opp.highestExchange)}</span>
-      </td>
-      <td>
-        {formatRate(opp.lowestRate)}
-        <span className="ex-label">{capitalize(opp.lowestExchange)}</span>
-      </td>
-    </tr>
-  ),
-);
-
-const MainTableRow = memo(
-  ({
-    row,
-    exchanges,
-    hiddenExchanges,
-    checked,
-    onToggle,
-  }: {
-    row: ExtendedRow;
-    exchanges: string[];
-    hiddenExchanges: Set<string>;
-    checked: boolean;
-    onToggle: (s: string) => void;
-  }) => (
-    <tr>
-      <td className="symbol-cell has-inline-checkbox">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={() => onToggle(row.symbol)}
-          title="Hide from dashboard"
-        />
-        {row.symbol}
-      </td>
-      <td className="gap-cell">
-        {row.maxGap ? `${(row.maxGap * RATE_TO_APR_PERCENT).toFixed(2)}%` : "-"}
-      </td>
-      {exchanges.map((ex) => {
-        if (hiddenExchanges.has(ex)) return <td key={ex}></td>;
-        const rate = row[ex] as number | undefined;
-        return (
-          <td key={ex} className={getRateColor(rate)}>
-            {formatRate(rate)}
-          </td>
-        );
-      })}
-    </tr>
-  ),
-);
-
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 const FundingDashboard = () => {
@@ -216,10 +113,7 @@ const FundingDashboard = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [tableSearchQuery, setTableSearchQuery] = useState("");
-
-  // Defer search queries so typing never blocks the UI thread
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-  const deferredTableSearchQuery = useDeferredValue(tableSearchQuery);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filterRef = useRef<HTMLDivElement>(null);
 
@@ -250,16 +144,16 @@ const FundingDashboard = () => {
   );
 
   const filteredSymbols = useMemo(() => {
-    if (!deferredSearchQuery) return allSymbols;
-    const lowerQuery = deferredSearchQuery.toLowerCase();
+    if (!searchQuery) return allSymbols;
+    const lowerQuery = searchQuery.toLowerCase();
     return allSymbols.filter((s) => s.toLowerCase().includes(lowerQuery));
-  }, [allSymbols, deferredSearchQuery]);
+  }, [allSymbols, searchQuery]);
 
   const filteredExchanges = useMemo(() => {
-    if (!deferredSearchQuery) return exchanges;
-    const lowerQuery = deferredSearchQuery.toLowerCase();
+    if (!searchQuery) return exchanges;
+    const lowerQuery = searchQuery.toLowerCase();
     return exchanges.filter((ex) => ex.toLowerCase().includes(lowerQuery));
-  }, [exchanges, deferredSearchQuery]);
+  }, [exchanges, searchQuery]);
 
   // Memoize sorted data to avoid re-sorting ~400 rows on every render
   const sortedData = useMemo(() => {
@@ -276,6 +170,36 @@ const FundingDashboard = () => {
       return 0;
     });
   }, [processedData, sortConfig]);
+
+  // Combined filter logic to calculate total pages and slice for pagination
+  const filteredTableData = useMemo(() => {
+    return sortedData.filter((row) => {
+      if (hiddenSymbols.has(row.symbol)) return false;
+      if (
+        searchQuery &&
+        !row.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+        return false;
+      if (
+        tableSearchQuery &&
+        !row.symbol.toLowerCase().includes(tableSearchQuery.toLowerCase())
+      )
+        return false;
+      return true;
+    });
+  }, [sortedData, hiddenSymbols, searchQuery, tableSearchQuery]);
+
+  const totalPages = Math.ceil(filteredTableData.length / ROWS_PER_PAGE);
+
+  // Auto-reset safely whenever search or filter length changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredTableData.length]);
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * ROWS_PER_PAGE;
+    return filteredTableData.slice(start, start + ROWS_PER_PAGE);
+  }, [filteredTableData, currentPage]);
 
   // Recalculate top 5 excluding hidden symbols
   const topOpportunities = useMemo(
@@ -370,15 +294,6 @@ const FundingDashboard = () => {
     });
   }, []);
 
-  const tokenItemData = useMemo(
-    () => ({
-      tokens: filteredSymbols,
-      hiddenSymbols,
-      toggleSymbol,
-    }),
-    [filteredSymbols, hiddenSymbols, toggleSymbol],
-  );
-
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
@@ -408,12 +323,33 @@ const FundingDashboard = () => {
                 </thead>
                 <tbody>
                   {topOpportunities.map((opp) => (
-                    <TopOppRow
-                      key={opp.symbol}
-                      opp={opp}
-                      checked={!hiddenSymbols.has(opp.symbol)}
-                      onToggle={toggleSymbol}
-                    />
+                    <tr key={opp.symbol}>
+                      <td className="symbol-cell has-inline-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={!hiddenSymbols.has(opp.symbol)}
+                          onChange={() => toggleSymbol(opp.symbol)}
+                          title="Hide from dashboard"
+                        />
+                        {opp.symbol}
+                      </td>
+                      <td className="strategy-cell">{opp.strategy}</td>
+                      <td className="text-green font-bold">
+                        {(opp.gap * RATE_TO_APR_PERCENT).toFixed(2)}%
+                      </td>
+                      <td>
+                        {formatRate(opp.highestRate)}
+                        <span className="ex-label">
+                          {capitalize(opp.highestExchange)}
+                        </span>
+                      </td>
+                      <td>
+                        {formatRate(opp.lowestRate)}
+                        <span className="ex-label">
+                          {capitalize(opp.lowestExchange)}
+                        </span>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -493,13 +429,14 @@ const FundingDashboard = () => {
                     {filteredSymbols.length > 0 && (
                       <div className="filter-group">
                         <div className="filter-group-title">Tokens</div>
-                        <List
-                          style={{ height: 200, width: "100%" }}
-                          rowCount={filteredSymbols.length}
-                          rowHeight={32}
-                          rowComponent={VirtualizedTokenRow}
-                          rowProps={tokenItemData}
-                        />
+                        {filteredSymbols.map((symbol) => (
+                          <FilterItem
+                            key={symbol}
+                            label={symbol}
+                            checked={!hiddenSymbols.has(symbol)}
+                            onToggle={toggleSymbol}
+                          />
+                        ))}
                       </div>
                     )}
 
@@ -565,31 +502,72 @@ const FundingDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedData
-                    .filter((row) => {
-                      if (hiddenSymbols.has(row.symbol)) return false;
-                      if (
-                        deferredTableSearchQuery &&
-                        !row.symbol
-                          .toLowerCase()
-                          .includes(deferredTableSearchQuery.toLowerCase())
-                      )
-                        return false;
-                      return true;
-                    })
-                    .map((row) => (
-                      <MainTableRow
-                        key={row.symbol}
-                        row={row}
-                        exchanges={exchanges}
-                        hiddenExchanges={hiddenExchanges}
-                        checked={!hiddenSymbols.has(row.symbol)}
-                        onToggle={toggleSymbol}
-                      />
-                    ))}
+                  {paginatedData.map((row) => (
+                    <tr key={row.symbol}>
+                      <td className="symbol-cell has-inline-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={!hiddenSymbols.has(row.symbol)}
+                          onChange={() => toggleSymbol(row.symbol)}
+                          title="Hide from dashboard"
+                        />
+                        {row.symbol}
+                      </td>
+                      <td className="gap-cell">
+                        {row.maxGap
+                          ? `${(row.maxGap * RATE_TO_APR_PERCENT).toFixed(2)}%`
+                          : "-"}
+                      </td>
+                      {exchanges.map((ex) => {
+                        if (hiddenExchanges.has(ex)) return <td key={ex}></td>;
+                        const rate = row[ex] as number | undefined;
+                        return (
+                          <td key={ex} className={getRateColor(rate)}>
+                            {formatRate(rate)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
+
+            {totalPages > 1 && (
+              <div
+                className="pagination-controls"
+                style={{
+                  marginTop: "1rem",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: "1rem",
+                }}
+              >
+                <button
+                  className="filter-btn"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <span
+                  className="page-info"
+                  style={{ color: "#888", fontSize: "14px" }}
+                >
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  className="filter-btn"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </section>
         </>
       )}
