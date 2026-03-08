@@ -27,6 +27,7 @@ const FundingDashboard = () => {
   const [hiddenSymbols, setHiddenSymbols] = useState<Set<string>>(new Set());
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [tableSearchQuery, setTableSearchQuery] = useState("");
   const filterRef = useRef<HTMLDivElement>(null);
 
   // Derive sorted list of all available symbols for the filter panel
@@ -195,8 +196,88 @@ const FundingDashboard = () => {
         <div className="loading">Loading funding rates...</div>
       ) : (
         <>
-          {/* Main Controls Area */}
+          {/* Top 5 Opportunities Table */}
+          <section className="top-opportunities">
+            <h2>🔥 Top 5 Arbitrage Opportunities</h2>
+            <div className="table-wrapper">
+              <table className="funding-table">
+                <thead>
+                  <tr>
+                    <th className="th-symbol">Symbol</th>
+                    <th>Strategy</th>
+                    <th>Gap (APR)</th>
+                    <th>Highest</th>
+                    <th>Lowest</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topOpportunities
+                    .filter((opp) => !hiddenSymbols.has(opp.symbol))
+                    .map((opp) => (
+                      <tr key={opp.symbol}>
+                        <td className="symbol-cell has-inline-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={!hiddenSymbols.has(opp.symbol)}
+                            onChange={() => toggleSymbol(opp.symbol)}
+                            title="Hide from dashboard"
+                          />
+                          {opp.symbol}
+                        </td>
+                        <td className="strategy-cell">{opp.strategy}</td>
+                        <td className="text-green font-bold">
+                          {(opp.gap * 1095 * 100).toFixed(2)}%
+                        </td>
+                        <td>
+                          {formatRate(opp.highestRate)}
+                          <span className="ex-label">
+                            {opp.highestExchange}
+                          </span>
+                        </td>
+                        <td>
+                          {formatRate(opp.lowestRate)}
+                          <span className="ex-label">{opp.lowestExchange}</span>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Main Controls Area for Both Tables */}
           <div className="dashboard-controls">
+            <div className="main-search-wrapper">
+              <svg
+                className="search-icon"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                type="text"
+                placeholder="Search tokens in table..."
+                value={tableSearchQuery}
+                onChange={(e) => setTableSearchQuery(e.target.value)}
+              />
+              {tableSearchQuery && (
+                <button
+                  className="filter-clear-btn"
+                  onClick={() => setTableSearchQuery("")}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
             <div className="filter-dropdown-container" ref={filterRef}>
               <button
                 className={`filter-toggle-btn ${isFilterOpen ? "active" : ""}`}
@@ -216,7 +297,7 @@ const FundingDashboard = () => {
                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
                   </svg>
                 </span>
-                Filter
+                Filter Settings
               </button>
 
               {isFilterOpen && (
@@ -308,47 +389,6 @@ const FundingDashboard = () => {
             </div>
           </div>
 
-          {/* Top 5 Opportunities Table */}
-          <section className="top-opportunities">
-            <h2>🔥 Top 5 Arbitrage Opportunities</h2>
-            <div className="table-wrapper">
-              <table className="funding-table">
-                <thead>
-                  <tr>
-                    <th className="th-symbol">Symbol</th>
-                    <th>Strategy</th>
-                    <th>Gap (APR)</th>
-                    <th>Highest</th>
-                    <th>Lowest</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topOpportunities
-                    .filter((opp) => !hiddenSymbols.has(opp.symbol))
-                    .map((opp) => (
-                      <tr key={opp.symbol}>
-                        <td className="symbol-cell">{opp.symbol}</td>
-                        <td className="strategy-cell">{opp.strategy}</td>
-                        <td className="text-green font-bold">
-                          {(opp.gap * 1095 * 100).toFixed(2)}%
-                        </td>
-                        <td>
-                          {formatRate(opp.highestRate)}
-                          <span className="ex-label">
-                            {opp.highestExchange}
-                          </span>
-                        </td>
-                        <td>
-                          {formatRate(opp.lowestRate)}
-                          <span className="ex-label">{opp.lowestExchange}</span>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
           {/* Main Comparison Table */}
           <section className="all-rates">
             <h2>All Rates</h2>
@@ -397,10 +437,28 @@ const FundingDashboard = () => {
                 </thead>
                 <tbody>
                   {sortedData
-                    .filter((row) => !hiddenSymbols.has(row.symbol))
+                    .filter((row) => {
+                      if (hiddenSymbols.has(row.symbol)) return false;
+                      if (
+                        tableSearchQuery &&
+                        !row.symbol
+                          .toLowerCase()
+                          .includes(tableSearchQuery.toLowerCase())
+                      )
+                        return false;
+                      return true;
+                    })
                     .map((row) => (
                       <tr key={row.symbol}>
-                        <td className="symbol-cell">{row.symbol}</td>
+                        <td className="symbol-cell has-inline-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={!hiddenSymbols.has(row.symbol)}
+                            onChange={() => toggleSymbol(row.symbol)}
+                            title="Hide from dashboard"
+                          />
+                          {row.symbol}
+                        </td>
                         <td className="gap-cell">
                           {row.maxGap
                             ? `${(row.maxGap * 1095 * 100).toFixed(2)}%`
