@@ -5,12 +5,6 @@ export interface FundingRate {
     rate: number;
 }
 
-export interface VariationalAsset {
-    symbol: string;
-    funding_rate?: number;
-    apr?: number;
-}
-
 export interface DashboardRow {
     symbol: string;
     [exchange: string]: number | string | undefined; // Added undefined to make it easier to extend

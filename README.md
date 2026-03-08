@@ -7,7 +7,8 @@ A real-time dashboard to track and compare funding rates across multiple cryptoc
 - **Real-Time Comparison**: Visualizes funding rates from multiple exchanges (Lighter, Binance, Hyperliquid, Variational) side-by-side, all normalized to APR.
 - **Arbitrage Finder**: Automatically calculates and displays the "Max Gap" (APR) between the highest and lowest funding rates for each asset.
 - **Top 5 Opportunities**: Highlights the top 5 arbitrage opportunities with the largest spread, suggesting Long/Short strategies.
-- **Token & Exchange Filter**: Hide specific tokens or entire exchanges using a sleek, searchable dropdown menu. Top 5 opportunities are recalculated dynamically based on visible tokens and exchanges.
+- **Token & Exchange Filter**: Hide specific tokens or entire exchanges using a searchable dropdown menu. Inline checkboxes next to each token provide quick per-row toggling. Top 5 opportunities recalculate dynamically.
+- **Table Search**: A dedicated search bar between the two tables lets you instantly filter the All Rates table by token name.
 - **Sorting**: Sort assets by symbol, max gap, or specific exchange rates.
 - **Live Updates**: Data refreshes automatically every 60 seconds.
 - **Responsive Design**: Built with a premium dark theme for easy readability.

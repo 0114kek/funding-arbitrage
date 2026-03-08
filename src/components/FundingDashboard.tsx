@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+  memo,
+  useDeferredValue,
+} from "react";
+import { List } from "react-window";
 import { fetchFundingRates } from "../services/api";
 import type { DashboardRow, SortConfig } from "../types";
 import {
@@ -7,14 +16,192 @@ import {
 } from "../utils/arbitrage";
 import "./Dashboard.css";
 
-// Extend DashboardRow to include possible gap for sorting
-type ExtendedRow = DashboardRow & {
-  maxGap?: number;
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+/** Multiplier to convert an 8-hour rate to an annual percentage (APR %). */
+const RATE_TO_APR_PERCENT = 1095 * 100; // 365 × 3 × 100
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type ExtendedRow = DashboardRow & { maxGap?: number };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const formatRate = (rate: number | undefined) => {
+  if (rate === undefined) return "-";
+  return `${(rate * RATE_TO_APR_PERCENT).toFixed(2)}%`;
 };
+
+const getRateColor = (rate: number | undefined) => {
+  if (rate === undefined) return "";
+  if (rate > 0) return "text-green";
+  if (rate < 0) return "text-red";
+  return "text-gray";
+};
+
+// ─── Icon Components ─────────────────────────────────────────────────────────
+
+const SearchIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    className="search-icon"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
+const FilterIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </svg>
+);
+
+// ─── Memoized Subcomponents ──────────────────────────────────────────────────
+
+const FilterItem = memo(
+  ({
+    label,
+    checked,
+    onToggle,
+    isExchange,
+  }: {
+    label: string;
+    checked: boolean;
+    onToggle: (v: string, e?: React.ChangeEvent | React.MouseEvent) => void;
+    isExchange?: boolean;
+  }) => (
+    <label className="filter-list-item">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onToggle(label, e)}
+        onClick={isExchange ? (e) => e.stopPropagation() : undefined}
+      />
+      <span className="filter-item-name">
+        {isExchange ? capitalize(label) : label}
+      </span>
+    </label>
+  ),
+);
+
+const VirtualizedTokenRow = ({
+  index,
+  style,
+  tokens,
+  hiddenSymbols,
+  toggleSymbol,
+}: any) => {
+  const symbol = tokens[index];
+  return (
+    <div style={style}>
+      <FilterItem
+        label={symbol}
+        checked={!hiddenSymbols.has(symbol)}
+        onToggle={toggleSymbol}
+      />
+    </div>
+  );
+};
+
+const TopOppRow = memo(
+  ({
+    opp,
+    checked,
+    onToggle,
+  }: {
+    opp: ArbitrageOpportunity;
+    checked: boolean;
+    onToggle: (s: string) => void;
+  }) => (
+    <tr>
+      <td className="symbol-cell has-inline-checkbox">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onToggle(opp.symbol)}
+          title="Hide from dashboard"
+        />
+        {opp.symbol}
+      </td>
+      <td className="strategy-cell">{opp.strategy}</td>
+      <td className="text-green font-bold">
+        {(opp.gap * RATE_TO_APR_PERCENT).toFixed(2)}%
+      </td>
+      <td>
+        {formatRate(opp.highestRate)}
+        <span className="ex-label">{capitalize(opp.highestExchange)}</span>
+      </td>
+      <td>
+        {formatRate(opp.lowestRate)}
+        <span className="ex-label">{capitalize(opp.lowestExchange)}</span>
+      </td>
+    </tr>
+  ),
+);
+
+const MainTableRow = memo(
+  ({
+    row,
+    exchanges,
+    hiddenExchanges,
+    checked,
+    onToggle,
+  }: {
+    row: ExtendedRow;
+    exchanges: string[];
+    hiddenExchanges: Set<string>;
+    checked: boolean;
+    onToggle: (s: string) => void;
+  }) => (
+    <tr>
+      <td className="symbol-cell has-inline-checkbox">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onToggle(row.symbol)}
+          title="Hide from dashboard"
+        />
+        {row.symbol}
+      </td>
+      <td className="gap-cell">
+        {row.maxGap ? `${(row.maxGap * RATE_TO_APR_PERCENT).toFixed(2)}%` : "-"}
+      </td>
+      {exchanges.map((ex) => {
+        if (hiddenExchanges.has(ex)) return <td key={ex}></td>;
+        const rate = row[ex] as number | undefined;
+        return (
+          <td key={ex} className={getRateColor(rate)}>
+            {formatRate(rate)}
+          </td>
+        );
+      })}
+    </tr>
+  ),
+);
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 
 const FundingDashboard = () => {
   const [rawData, setRawData] = useState<DashboardRow[]>([]);
-  const [data, setData] = useState<ExtendedRow[]>([]);
   const [exchanges, setExchanges] = useState<string[]>([]);
   const [hiddenExchanges, setHiddenExchanges] = useState<Set<string>>(
     new Set(),
@@ -25,25 +212,81 @@ const FundingDashboard = () => {
     direction: "desc",
   });
   const [hiddenSymbols, setHiddenSymbols] = useState<Set<string>>(new Set());
+
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [tableSearchQuery, setTableSearchQuery] = useState("");
+
+  // Defer search queries so typing never blocks the UI thread
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredTableSearchQuery = useDeferredValue(tableSearchQuery);
+
   const filterRef = useRef<HTMLDivElement>(null);
 
-  // Derive sorted list of all available symbols for the filter panel
-  const allSymbols = [...new Set(data.map((row) => row.symbol))].sort();
+  // ─── Derived / Memoized Data ─────────────────────────────────────────────
+
+  // Dynamic Arbitrage calculation based on visible exchanges
+  const { processedData, allOpportunities } = useMemo(() => {
+    const visibleExchanges = exchanges.filter((ex) => !hiddenExchanges.has(ex));
+    const processed: ExtendedRow[] = [];
+    const opps: ArbitrageOpportunity[] = [];
+
+    rawData.forEach((row) => {
+      const arb = calculateArbitrage(row, visibleExchanges);
+      if (arb) {
+        processed.push({ ...row, maxGap: arb.gap });
+        opps.push(arb);
+      }
+    });
+
+    opps.sort((a, b) => b.gap - a.gap);
+    return { processedData: processed, allOpportunities: opps };
+  }, [rawData, exchanges, hiddenExchanges]);
+
+  // Memoize the symbol list so it doesn't re-create on every render
+  const allSymbols = useMemo(
+    () => [...new Set(processedData.map((row) => row.symbol))].sort(),
+    [processedData],
+  );
 
   const filteredSymbols = useMemo(() => {
-    if (!searchQuery) return allSymbols;
-    const lowerQuery = searchQuery.toLowerCase();
+    if (!deferredSearchQuery) return allSymbols;
+    const lowerQuery = deferredSearchQuery.toLowerCase();
     return allSymbols.filter((s) => s.toLowerCase().includes(lowerQuery));
-  }, [allSymbols, searchQuery]);
+  }, [allSymbols, deferredSearchQuery]);
 
   const filteredExchanges = useMemo(() => {
-    if (!searchQuery) return exchanges;
-    const lowerQuery = searchQuery.toLowerCase();
+    if (!deferredSearchQuery) return exchanges;
+    const lowerQuery = deferredSearchQuery.toLowerCase();
     return exchanges.filter((ex) => ex.toLowerCase().includes(lowerQuery));
-  }, [exchanges, searchQuery]);
+  }, [exchanges, deferredSearchQuery]);
+
+  // Memoize sorted data to avoid re-sorting ~400 rows on every render
+  const sortedData = useMemo(() => {
+    return [...processedData].sort((a, b) => {
+      const aValue = a[sortConfig.key];
+      const bValue = b[sortConfig.key];
+
+      if (aValue === undefined && bValue === undefined) return 0;
+      if (aValue === undefined) return 1;
+      if (bValue === undefined) return -1;
+
+      if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [processedData, sortConfig]);
+
+  // Recalculate top 5 excluding hidden symbols
+  const topOpportunities = useMemo(
+    () =>
+      allOpportunities
+        .filter((opp) => !hiddenSymbols.has(opp.symbol))
+        .slice(0, 5),
+    [allOpportunities, hiddenSymbols],
+  );
+
+  // ─── Effects ─────────────────────────────────────────────────────────────
 
   // Handle clicking outside of dropdown to close it
   useEffect(() => {
@@ -61,44 +304,9 @@ const FundingDashboard = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isFilterOpen]);
 
-  const toggleSymbol = (symbol: string) => {
-    setHiddenSymbols((prev) => {
-      const next = new Set(prev);
-      if (next.has(symbol)) {
-        next.delete(symbol);
-      } else {
-        next.add(symbol);
-      }
-      return next;
-    });
-  };
-
-  const toggleExchange = (
-    exchange: string,
-    e?: React.MouseEvent | React.ChangeEvent,
-  ) => {
-    if (e) e.stopPropagation();
-    setHiddenExchanges((prev) => {
-      const next = new Set(prev);
-      if (next.has(exchange)) {
-        next.delete(exchange);
-      } else {
-        next.add(exchange);
-      }
-      return next;
-    });
-  };
-
-  const resetFilters = () => {
-    setHiddenSymbols(new Set());
-    setHiddenExchanges(new Set());
-    setSearchQuery("");
-  };
-
   useEffect(() => {
     const loadData = async () => {
-      // Don't show loading on subsequent refreshes to prevent flickering
-      if (data.length === 0) setIsLoading(true);
+      if (rawData.length === 0) setIsLoading(true);
 
       const { data: rawResp, exchanges: excha } = await fetchFundingRates();
       setRawData(rawResp);
@@ -111,77 +319,65 @@ const FundingDashboard = () => {
     return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Dynamic Arbitrage calculation based on visible exchanges
-  const { processedData, allOpportunities } = useMemo(() => {
-    const visibleExchanges = exchanges.filter((ex) => !hiddenExchanges.has(ex));
-    const processed: ExtendedRow[] = [];
-    const opps: ArbitrageOpportunity[] = [];
+  // ─── Stable Callbacks ────────────────────────────────────────────────────
 
-    rawData.forEach((row) => {
-      const arb = calculateArbitrage(row, visibleExchanges);
-      if (arb) {
-        // Only include if it has >1 exchange (arb is not null)
-
-        processed.push({ ...row, maxGap: arb.gap });
-        opps.push(arb);
+  const toggleSymbol = useCallback((symbol: string) => {
+    setHiddenSymbols((prev) => {
+      const next = new Set(prev);
+      if (next.has(symbol)) {
+        next.delete(symbol);
+      } else {
+        next.add(symbol);
       }
+      return next;
     });
+  }, []);
 
-    opps.sort((a, b) => b.gap - a.gap);
-    return { processedData: processed, allOpportunities: opps };
-  }, [rawData, exchanges, hiddenExchanges]);
-
-  useEffect(() => {
-    setData(processedData);
-  }, [processedData]);
-
-  const handleSort = (key: string) => {
-    let direction: "asc" | "desc" = "desc";
-    if (sortConfig.key === key && sortConfig.direction === "desc") {
-      direction = "asc";
-    } else if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    } else if (key === "symbol") {
-      direction = "asc";
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const sortedData = [...data].sort((a, b) => {
-    const aValue = a[sortConfig.key];
-    const bValue = b[sortConfig.key];
-
-    if (aValue === undefined && bValue === undefined) return 0;
-    if (aValue === undefined) return 1;
-    if (bValue === undefined) return -1;
-
-    if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
-    if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
-    return 0;
-  });
-
-  // Recalculate top 5 excluding hidden symbols
-  const topOpportunities = useMemo(
-    () =>
-      allOpportunities
-        .filter((opp) => !hiddenSymbols.has(opp.symbol))
-        .slice(0, 5),
-    [allOpportunities, hiddenSymbols],
+  const toggleExchange = useCallback(
+    (exchange: string, e?: React.MouseEvent | React.ChangeEvent) => {
+      if (e) e.stopPropagation();
+      setHiddenExchanges((prev) => {
+        const next = new Set(prev);
+        if (next.has(exchange)) {
+          next.delete(exchange);
+        } else {
+          next.add(exchange);
+        }
+        return next;
+      });
+    },
+    [],
   );
 
-  const formatRate = (rate: number | undefined) => {
-    if (rate === undefined) return "-";
-    // Convert 8h rate to APR: rate * 1095 (365 * 3), then display as %
-    const apr = rate * 1095 * 100;
-    return `${apr.toFixed(2)}%`;
-  };
+  const resetFilters = useCallback(() => {
+    setHiddenSymbols(new Set());
+    setHiddenExchanges(new Set());
+    setSearchQuery("");
+    setTableSearchQuery("");
+  }, []);
 
-  const getRateColor = (rate: number | undefined) => {
-    if (rate === undefined) return "";
-    if (rate > 0) return "text-green";
-    if (rate < 0) return "text-red";
-    return "text-gray";
-  };
+  const handleSort = useCallback((key: string) => {
+    setSortConfig((prev) => {
+      let direction: "asc" | "desc" = "desc";
+      if (prev.key === key && prev.direction === "desc") {
+        direction = "asc";
+      } else if (prev.key === key && prev.direction === "asc") {
+        direction = "desc";
+      } else if (key === "symbol") {
+        direction = "asc";
+      }
+      return { key, direction };
+    });
+  }, []);
+
+  const tokenItemData = useMemo(
+    () => ({
+      tokens: filteredSymbols,
+      hiddenSymbols,
+      toggleSymbol,
+    }),
+    [filteredSymbols, hiddenSymbols, toggleSymbol],
+  );
 
   return (
     <div className="dashboard-container">
@@ -211,35 +407,14 @@ const FundingDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {topOpportunities
-                    .filter((opp) => !hiddenSymbols.has(opp.symbol))
-                    .map((opp) => (
-                      <tr key={opp.symbol}>
-                        <td className="symbol-cell has-inline-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={!hiddenSymbols.has(opp.symbol)}
-                            onChange={() => toggleSymbol(opp.symbol)}
-                            title="Hide from dashboard"
-                          />
-                          {opp.symbol}
-                        </td>
-                        <td className="strategy-cell">{opp.strategy}</td>
-                        <td className="text-green font-bold">
-                          {(opp.gap * 1095 * 100).toFixed(2)}%
-                        </td>
-                        <td>
-                          {formatRate(opp.highestRate)}
-                          <span className="ex-label">
-                            {opp.highestExchange}
-                          </span>
-                        </td>
-                        <td>
-                          {formatRate(opp.lowestRate)}
-                          <span className="ex-label">{opp.lowestExchange}</span>
-                        </td>
-                      </tr>
-                    ))}
+                  {topOpportunities.map((opp) => (
+                    <TopOppRow
+                      key={opp.symbol}
+                      opp={opp}
+                      checked={!hiddenSymbols.has(opp.symbol)}
+                      onToggle={toggleSymbol}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -248,20 +423,7 @@ const FundingDashboard = () => {
           {/* Main Controls Area for Both Tables */}
           <div className="dashboard-controls">
             <div className="main-search-wrapper">
-              <svg
-                className="search-icon"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
+              <SearchIcon />
               <input
                 type="text"
                 placeholder="Search tokens in table..."
@@ -284,18 +446,7 @@ const FundingDashboard = () => {
                 onClick={() => setIsFilterOpen(!isFilterOpen)}
               >
                 <span className="filter-icon">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                  </svg>
+                  <FilterIcon />
                 </span>
                 Filter Settings
               </button>
@@ -304,20 +455,7 @@ const FundingDashboard = () => {
                 <div className="filter-dropdown-menu">
                   <div className="filter-header-row">
                     <div className="filter-search-input-wrapper">
-                      <svg
-                        className="search-icon"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                      </svg>
+                      <SearchIcon size={14} />
                       <input
                         type="text"
                         placeholder="Search assets..."
@@ -341,17 +479,13 @@ const FundingDashboard = () => {
                       <div className="filter-group">
                         <div className="filter-group-title">Exchanges</div>
                         {filteredExchanges.map((ex) => (
-                          <label key={ex} className="filter-list-item">
-                            <input
-                              type="checkbox"
-                              checked={!hiddenExchanges.has(ex)}
-                              onChange={(e) => toggleExchange(ex, e)}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                            <span className="filter-item-name">
-                              {ex.charAt(0).toUpperCase() + ex.slice(1)}
-                            </span>
-                          </label>
+                          <FilterItem
+                            key={ex}
+                            label={ex}
+                            checked={!hiddenExchanges.has(ex)}
+                            onToggle={toggleExchange}
+                            isExchange
+                          />
                         ))}
                       </div>
                     )}
@@ -359,16 +493,13 @@ const FundingDashboard = () => {
                     {filteredSymbols.length > 0 && (
                       <div className="filter-group">
                         <div className="filter-group-title">Tokens</div>
-                        {filteredSymbols.map((symbol) => (
-                          <label key={symbol} className="filter-list-item">
-                            <input
-                              type="checkbox"
-                              checked={!hiddenSymbols.has(symbol)}
-                              onChange={() => toggleSymbol(symbol)}
-                            />
-                            <span className="filter-item-name">{symbol}</span>
-                          </label>
-                        ))}
+                        <List
+                          style={{ height: 200, width: "100%" }}
+                          rowCount={filteredSymbols.length}
+                          rowHeight={32}
+                          rowComponent={VirtualizedTokenRow}
+                          rowProps={tokenItemData}
+                        />
                       </div>
                     )}
 
@@ -427,9 +558,7 @@ const FundingDashboard = () => {
                         } ${hiddenExchanges.has(ex) ? "th-exchange--hidden" : ""}`}
                       >
                         <div className="th-exchange-content">
-                          <span>
-                            {ex.charAt(0).toUpperCase() + ex.slice(1)}
-                          </span>
+                          <span>{capitalize(ex)}</span>
                         </div>
                       </th>
                     ))}
@@ -440,41 +569,23 @@ const FundingDashboard = () => {
                     .filter((row) => {
                       if (hiddenSymbols.has(row.symbol)) return false;
                       if (
-                        tableSearchQuery &&
+                        deferredTableSearchQuery &&
                         !row.symbol
                           .toLowerCase()
-                          .includes(tableSearchQuery.toLowerCase())
+                          .includes(deferredTableSearchQuery.toLowerCase())
                       )
                         return false;
                       return true;
                     })
                     .map((row) => (
-                      <tr key={row.symbol}>
-                        <td className="symbol-cell has-inline-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={!hiddenSymbols.has(row.symbol)}
-                            onChange={() => toggleSymbol(row.symbol)}
-                            title="Hide from dashboard"
-                          />
-                          {row.symbol}
-                        </td>
-                        <td className="gap-cell">
-                          {row.maxGap
-                            ? `${(row.maxGap * 1095 * 100).toFixed(2)}%`
-                            : "-"}
-                        </td>
-                        {exchanges.map((ex) => {
-                          if (hiddenExchanges.has(ex))
-                            return <td key={ex}></td>;
-                          const rate = row[ex] as number | undefined;
-                          return (
-                            <td key={ex} className={getRateColor(rate)}>
-                              {formatRate(rate)}
-                            </td>
-                          );
-                        })}
-                      </tr>
+                      <MainTableRow
+                        key={row.symbol}
+                        row={row}
+                        exchanges={exchanges}
+                        hiddenExchanges={hiddenExchanges}
+                        checked={!hiddenSymbols.has(row.symbol)}
+                        onToggle={toggleSymbol}
+                      />
                     ))}
                 </tbody>
               </table>

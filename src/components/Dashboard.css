@@ -112,13 +112,6 @@ h2 {
   gap: 0.5rem;
 }
 
-.th-exchange-content input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-  accent-color: #60a5fa;
-}
-
 .th-exchange--hidden {
   opacity: 0.5;
   background: rgba(15, 23, 42, 0.5) !important;
@@ -417,29 +410,6 @@ h2 {
   text-align: center;
   color: #64748b;
   font-size: 0.85rem;
-}
-
-/* In-table checkbox column */
-.th-checkbox {
-  width: 40px;
-  text-align: center !important;
-  cursor: default !important;
-  padding-left: 0.5rem !important;
-  padding-right: 0.5rem !important;
-}
-
-.checkbox-cell {
-  text-align: center !important;
-  width: 40px;
-  padding-left: 0.5rem !important;
-  padding-right: 0.5rem !important;
-}
-
-.checkbox-cell input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  accent-color: #60a5fa;
-  cursor: pointer;
 }
 
 .filter-footer {
