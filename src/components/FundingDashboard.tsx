@@ -67,6 +67,28 @@ const FilterIcon = () => (
   </svg>
 );
 
+const StarIcon = ({
+  size = 16,
+  filled = false,
+}: {
+  size?: number;
+  filled?: boolean;
+}) => (
+  <svg
+    className={`star-icon ${filled ? "filled" : ""}`}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill={filled ? "currentColor" : "none"}
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
 // ─── Memoized Subcomponents ──────────────────────────────────────────────────
 
 const FilterItem = memo(
@@ -109,6 +131,14 @@ const FundingDashboard = () => {
     direction: "desc",
   });
   const [hiddenSymbols, setHiddenSymbols] = useState<Set<string>>(new Set());
+  const [pinnedSymbols, setPinnedSymbols] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("pinnedSymbols");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -158,6 +188,12 @@ const FundingDashboard = () => {
   // Memoize sorted data to avoid re-sorting ~400 rows on every render
   const sortedData = useMemo(() => {
     return [...processedData].sort((a, b) => {
+      const aPinned = pinnedSymbols.has(a.symbol);
+      const bPinned = pinnedSymbols.has(b.symbol);
+
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+
       const aValue = a[sortConfig.key];
       const bValue = b[sortConfig.key];
 
@@ -169,7 +205,7 @@ const FundingDashboard = () => {
       if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
       return 0;
     });
-  }, [processedData, sortConfig]);
+  }, [processedData, sortConfig, pinnedSymbols]);
 
   // Combined filter logic to calculate total pages and slice for pagination
   const filteredTableData = useMemo(() => {
@@ -243,10 +279,30 @@ const FundingDashboard = () => {
     return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    localStorage.setItem(
+      "pinnedSymbols",
+      JSON.stringify(Array.from(pinnedSymbols)),
+    );
+  }, [pinnedSymbols]);
+
   // ─── Stable Callbacks ────────────────────────────────────────────────────
 
   const toggleSymbol = useCallback((symbol: string) => {
     setHiddenSymbols((prev) => {
+      const next = new Set(prev);
+      if (next.has(symbol)) {
+        next.delete(symbol);
+      } else {
+        next.add(symbol);
+      }
+      return next;
+    });
+  }, []);
+
+  const togglePin = useCallback((symbol: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setPinnedSymbols((prev) => {
       const next = new Set(prev);
       if (next.has(symbol)) {
         next.delete(symbol);
@@ -325,6 +381,20 @@ const FundingDashboard = () => {
                   {topOpportunities.map((opp) => (
                     <tr key={opp.symbol}>
                       <td className="symbol-cell has-inline-checkbox">
+                        <button
+                          className="pin-btn"
+                          onClick={(e) => togglePin(opp.symbol, e)}
+                          title={
+                            pinnedSymbols.has(opp.symbol)
+                              ? "Unpin token"
+                              : "Pin token to top"
+                          }
+                        >
+                          <StarIcon
+                            size={14}
+                            filled={pinnedSymbols.has(opp.symbol)}
+                          />
+                        </button>
                         <input
                           type="checkbox"
                           checked={!hiddenSymbols.has(opp.symbol)}
@@ -505,6 +575,20 @@ const FundingDashboard = () => {
                   {paginatedData.map((row) => (
                     <tr key={row.symbol}>
                       <td className="symbol-cell has-inline-checkbox">
+                        <button
+                          className="pin-btn"
+                          onClick={(e) => togglePin(row.symbol, e)}
+                          title={
+                            pinnedSymbols.has(row.symbol)
+                              ? "Unpin token"
+                              : "Pin token to top"
+                          }
+                        >
+                          <StarIcon
+                            size={14}
+                            filled={pinnedSymbols.has(row.symbol)}
+                          />
+                        </button>
                         <input
                           type="checkbox"
                           checked={!hiddenSymbols.has(row.symbol)}

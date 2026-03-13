@@ -161,6 +161,28 @@ h2 {
   margin: 0;
 }
 
+.pin-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.pin-btn:hover {
+  color: #94a3b8;
+  transform: scale(1.1);
+}
+
+.star-icon.filled {
+  color: #fbbf24;
+}
+
 .strategy-cell {
   text-align: left !important;
   color: #fbbf24; /* Amber-400 */
